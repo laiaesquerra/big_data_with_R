@@ -55,8 +55,8 @@ orders %>%
 **Matriu A**
 
 ```{r}
-U <- as.matrix(explicit_model$user.factors)
-V <- as.matrix(explicit_model$item.factors)
+U <- as.matrix(explicit_model$user.factors[,-1])
+V <- as.matrix(explicit_model$item.factors[,-1])
 A2 <- U%*%t(V)
 
 library(whisker)
@@ -64,6 +64,10 @@ library(magrittr)
 
 i_max <- apply(A2,1,max)
 which(A2[6,]==i_max[6])
+
+for(i in 1:nrow(A2)){
+  cat(which(A2[i,]==i_max[i]), "\n")
+}
 
 recom_prod_txt <- "which(A2[{{userId}},]==i_max[{{userID}}])"
 
@@ -74,5 +78,7 @@ recom_prod_txt %>%
   cat
 ```
 
+Són indexos dins de la matriu, no productes
 
+per users_factor, producte escalar amb items_factor per columnes, per saber quin és
 

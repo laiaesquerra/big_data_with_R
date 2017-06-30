@@ -5,6 +5,9 @@ date: "June 30, 2017"
 output: html_document
 ---
 
+Correu: `bartekskorulski@gmail.com`
+
+
 ```{r}
 source("readDataToMemory.R")
 readInstacart()
@@ -15,3 +18,196 @@ library(ggthemes)
 
 src_tbls(sc)
 ```
+
+- Last hour purchases
+
+```{r}
+last_hour_txt <- "
+SELECT ab.product_id
+,   n_orders
+,   product_name
+FROM (
+    SELECT product_id
+    ,   COUNT(1) AS n_orders
+    FROM (SELECT order_id 
+          FROM orders_tbl
+          WHERE order_hour_of_day > 20) a
+      LEFT JOIN order_products__prior_tbl b
+      ON a.order_id = b.order_id
+    GROUP BY product_id
+    ORDER BY n_orders DESC
+    LIMIT 30) ab
+LEFT JOIN (
+    SELECT product_id
+    ,   product_name
+    FROM products_tbl) c
+ON ab.product_id = c.product_id
+"
+
+last_hour <-
+  dbGetQuery(sc, last_hour_txt)
+
+last_hour
+```
+
+- Are the last added products unnecessary?
+
+```{r}
+prods_basket_txt <- "
+SELECT *
+FROM
+  (SELECT order_id, MAX (add_to_cart_order) as nmax
+  FROM order_products__prior_tbl
+  GROUP BY order_id
+  LIMIT 10) AS a
+    LEFT JOIN order_products__prior_tbl AS b
+    ON a.nmax=b.add_to_cart_order
+WHERE a.order_id=b.order_id
+LIMIT 10
+"
+
+(prods_basket <-
+  dbGetQuery(sc, prods_basket_txt))
+```
+
+- Does a person who buys everyday repeat products?
+
+```{r}
+dbGetQuery(sc, 
+"
+SELECT user_id
+,   order_id
+,   order_number
+,   days_since_prior_order
+,   IF(days_since_first_order IS NULL, 0, days_since_first_order) as days_since_first_order
+FROM(
+SELECT user_id
+,   order_id
+,   order_number
+,   days_since_prior_order
+,   SUM(days_since_prior_order) OVER (partition by user_id ORDER BY order_number) AS days_since_first_order
+FROM orders_tbl
+WHERE user_id <= 10 
+) a
+ORDER BY user_id
+")
+
+dbGetQuery(sc, 
+"
+SELECT user_id
+,   order_id
+,   order_number
+,   days_since_prior_order
+,   IF(days_since_first_order IS NULL, 0, days_since_first_order) as days_since_first_order
+FROM(
+SELECT order_id
+,   SUM(reordered) OVER (PARTITION by order_id ORDER BY product_id) AS n_reordered_prod
+FROM order_products__prior_tbl
+WHERE order_id = 1 
+) a
+ORDER BY user_id
+")
+
+#When are reordered products added to the cart
+dbGetQuery(sc, 
+"SELECT order_id
+,   add_to_cart_order
+,   SUM(reordered) OVER (PARTITION by order_id ORDER BY add_to_cart_order) AS n_reordered_prod
+FROM order_products__prior_tbl
+WHERE order_id < 10
+")
+
+#Who are regular users
+dbGetQuery(sc, 
+"
+SELECT order_id
+FROM orders_tbl
+WHERE days_since_prior_order < 7
+LIMIT 30
+")
+```
+
+*When do frequent users add reordered products to the cart*
+
+That is, in which order do users who buy on a regular basis (who go at least twice a week) add reordered products into their carts.
+
+```{r}
+dbGetQuery(sc, 
+"SELECT b.order_id
+,   days_since_prior_order
+,   add_to_cart_order
+,   SUM(reordered) OVER (PARTITION by b.order_id ORDER BY add_to_cart_order) AS n_reordered_prod
+FROM (SELECT order_id, days_since_prior_order
+      FROM orders_tbl
+      WHERE days_since_prior_order < 4
+      LIMIT 30) a
+  LEFT JOIN order_products__prior_tbl b
+  ON a.order_id=b.order_id
+")
+```
+
+```{r}
+dbGetQuery(sc, 
+"
+SELECT ab.*, c.product_name
+FROM(
+  SELECT b.order_id
+  ,   product_id
+  ,   days_since_prior_order
+  ,   add_to_cart_order
+  ,   SUM(reordered) OVER (PARTITION by b.order_id ORDER BY add_to_cart_order) AS n_reordered_prod
+  FROM (SELECT order_id, days_since_prior_order
+        FROM orders_tbl
+        WHERE days_since_prior_order < 4
+        LIMIT 30) a
+    LEFT JOIN order_products__prior_tbl b
+    ON a.order_id=b.order_id
+) ab LEFT JOIN products_tbl c
+     ON ab.product_id=c.product_id
+")
+```
+
+
+
+- Regular consumers most ordered products
+
+```{r}
+regular_consumer_txt <- "
+SELECT ab.product_id
+,   n_orders
+,   product_name
+FROM (
+    SELECT product_id
+    ,   COUNT(1) AS n_orders
+    FROM (SELECT order_id 
+          FROM orders_tbl
+          WHERE days_since_prior_order < 4) a
+      LEFT JOIN order_products__prior_tbl b
+      ON a.order_id = b.order_id
+    GROUP BY product_id
+    ORDER BY n_orders DESC
+    LIMIT 30) ab
+LEFT JOIN (
+    SELECT product_id
+    ,   product_name
+    FROM products_tbl) c
+ON ab.product_id = c.product_id
+"
+
+(regular_consumer <-
+  dbGetQuery(sc, regular_consumer_txt))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

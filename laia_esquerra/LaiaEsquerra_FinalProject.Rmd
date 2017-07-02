@@ -2,10 +2,10 @@
 title: "Final Project"
 author: "Laia Esquerrà"
 date: "June 30, 2017"
-output: html_document
+output: 
+  html_document:
+    toc: yes
 ---
-
-Correu: `bartekskorulski@gmail.com`
 
 #Exploratory Analysis
 
@@ -20,11 +20,11 @@ library(ggthemes)
 src_tbls(sc)
 ```
 
-Given the data from *Instacart* and the previous analysis we made, we propose here some further approaches to it. 
+Given the data from *Instacart* and the previous analysis we made, we suggest here some further approaches to it. 
 
-First of all we'll analyse the pattern of the last minute purchases. Forehand, it would make sense that these follow a different pattern than general purchases, being this purchases made during the latter hours of the day directly related to some fast dinner arrangement or similar.
+First of all we'll analyse the pattern of the last minute purchases. Beforehand, it would make sense that these follow a different pattern than general purchases, being this purchases made during the latter hours of the day directly related to some fast dinner arrangements or similar.
 
-On the other hand, we'll analyse the last products added to a shopping cart. A first hypothesis in this case could be that those last items are usually not planned forehand, i.e., they have impulsively been added responding to last minute whims or as a result of the given recommendations from the app.
+On the other hand, we'll analyse the last products added to a shopping cart. A first hypothesis in this case could be that those last items are usually not planned beforehand, i.e., they have impulsively been added responding to last minute whims or as a result of the given recommendations from the app.
 
 Finally, we'll see how regular consumers behave in relation to the rest.
 
@@ -79,6 +79,8 @@ On the contrary, these purchases same to follow the exact same pattern than the 
 
 Note that this data comes from an app where customers select groceries online from various retailers and these are delivered by a personal shopper. Therefore, the fact that an order is taken in the evening shows no differential pattern, thus this purchases will probably be delivered the next day. It doesn't really correspond to a last minute purchase but to customers who make their orders at night when at home.
 
+**Actions** $\to$ If the analysis had given significant results, we could have thought of some discounts or baskets of multiple products which are not usually bought but could actually be usefull to this consumer and would buy them in this case. For example, we could add some paper napkins or disposable plates to offer at a discount price when bought with pizza.
+
 ##Last added products
 
 Which are the last added products in a basket? Do they follow a pattern or do they appear to be random and thus, probably unnecessary, resulting from a last minute impulse?
@@ -121,6 +123,7 @@ last_prods %>%
   scale_y_continuous(label=scales::comma) +
   xlab("Products") +
   ylab(paste("Popularity")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   theme_minimal()
 ```
 
@@ -170,6 +173,8 @@ last_prods_dpt %>%
 
 Now we can see that, the last added products in a cart come mainly from the 4th department, as well as many from the 19th. These correspondingly being *Produce (Fruits & Vegetables)* and *Snacks*. The first is by far the most common department, not in the amount of different products they have, but the one from which the most ordered products are from. Therefore, it is not uncommon for it to also be the most relevant here. Our interest falls on the latter though. As we suggested, many products which are last added to a cart are whims.
 
+**Actions** $\to$ Analysing the average number of products that each client usually has in his/her basket we could start doing recommendations for snacks as the number of items in the current purchase cart is getting closer to its usual maximum.
+
 **Reordered**
 
 Finally, we can analyse if this products are less reordered than the rest of products in the basket. Therefore, we'll calculate the ratio of reordered products which have been added last to an order and we'll compare it to the general ratio for these users.
@@ -210,10 +215,10 @@ order_products__prior %>%
 
 ```{r}
 #ratio
-228/(228+176)
+round(228/(228+176), 3)
 ```
 
-As we can see, the latter added products are less frequently reordered products from previous purchases, which would be consistent with our first hypothesis that they are usually not planned forehand but instead, have been added more impulsively.
+As we can see, the latter added products are less frequently reordered products from previous purchases, which would be consistent with our first hypothesis that they are usually not planned beforehand but instead, have been added more impulsively.
 
 ##Regular consumers
 
@@ -267,6 +272,8 @@ As we can see, there are some consumers who do not reorder the same products fro
 
 But, on the other hand, most of this users rebuy exactly the same things, and it is precisely these reordered products the ones which are first added to their carts. This corresponds to a very structured shopper who has a clear system and knows exactly what he/she's going to add to the cart before even opening the app. At the end of their shopping lists they might be adding some extra products which they were not predicting or that have been suggested for them, as we saw happens with the latter added items.
 
+**Actions** $\to$ As this confirms the analysis that we made in the previous section, we should focus on starting to recommend snacks at that point of the shopping cart where the user is almost getting to the end of his order.
+
 Finally, we might be interested in analysing which products are more frequently bought by this consumers' group.
 
 **Regular consumers most ordered products**
@@ -300,10 +307,15 @@ ON ab.product_id = c.product_id
 
 As we can see, again, their most ordered products do not difer from those most generally ordered. In fact, we could think that these most regular consumers are the ones that end up determining which are the most ordered products among the whole dataset.
 
+\bigskip
 
 #Recommender and Predictions
 
-```{r}
+First of all we'll create a rating for the products. In this sense, we'll give between zero and ten points to each product the 10 first consumers have in their basket. Thus, we won't be given a single value for all of them as the general recommendation for snacks that we suggested before did, but the next product will be uniquely thought for each one of them.
+
+*Note*: we are only working on the first ten users but we can extend this analysis to all of them.
+
+```{r, warning=FALSE}
 order_products__prior %>%
   select(order_id, product_id) %>%
   left_join(orders, by="order_id") %>%
@@ -315,62 +327,63 @@ order_products__prior %>%
   mutate(item=product_id) %>%
   select(user, item, rating) ->
   user_item_rating
-```
 
-
-```{r}
 user_item_rating
 ```
 
-```{r}
-explicit_model <- ml_als_factorization( user_item_rating, iter.max = 5, regularization.parameter = 0.01)
-```
+To continue, we'll try out a simple *Alternating Least Squares* model to adjust the data.
 
 ```{r}
-explicit_model
+(explicit_model <- ml_als_factorization( user_item_rating, iter.max = 5, regularization.parameter = 0.01))
 ```
 
-```{r}
-order_products__prior %>%
-  colnames %>%
-  print
+In the resulting matrices we have the principal axes that descibe each dimension. The `$user.factors` matrix is square while we have `$item.factors` for each of the products that have been taken into account.
 
-orders %>%
-  colnames %>%
-  print
-```
+As we are applying a simple factorization method, we'll define our data matrix as: 
 
-**Matriu A**
+$$A_{nxm} = U_{nxp} (V^{T})_{pxm}$$
+
+  where $U$ defines the individuals, in our case the consumers; and $V$ defines variables, in our case the items.
+  
+  The original values are directly related to the weights each product and customer has on the definition of each dimension, while the final values in $A$ will correspond to a second more accurate rating of the products.
+
+**A Matrix**
 
 ```{r}
 U <- as.matrix(explicit_model$user.factors[,-1])
 V <- as.matrix(explicit_model$item.factors[,-1])
-A2 <- U%*%t(V)
-
-library(whisker)
-library(magrittr)
-
-i_max <- apply(A2,1,max)
-which(A2[6,]==i_max[6])
-
-for(i in 1:nrow(A2)){
-  cat(which(A2[i,]==i_max[i]), "\n")
-}
-
-recom_prod_txt <- "which(A2[{{userId}},]==i_max[{{userID}}])"
-
-data <- list(userId=1)
-
-recom_prod_txt %>%
-  whisker.render(data) %>%
-  cat
+A <- U%*%t(V)
 ```
 
-Són indexos dins de la matriu, no productes
+One approach to predict which one will be the next product added by a consumer could be taking for each one of them that one item which has the highest final rating.
 
-per users_factor, producte escalar amb items_factor per columnes, per saber quin és
+Below, we suggest one way to determine the indexes of these products inside the matrix `A`.
 
+```{r}
+#indexes where the maximum value is found
+i_max <- apply(A,1,max)
+ls <- list()
+for(i in 1:nrow(A)){
+  ls[[i]] <- which(A[i,]==i_max[i])
+}
+```
 
+Then, for each user, we can obtain which products this correspond to.
+
+```{r}
+ls_prods <- list()
+for(i in 1:length(ls)){
+  ls_prods[[i]] <- vector()
+  for(j in 1:length(ls[[i]])){
+    ls_prods[[i]] <- c(ls_prods[[i]], explicit_model$item.factors[ls[[i]][j],1])
+  }
+}
+ls_prods
+```
+
+Thus, if we want to know, which item will be most likely chosen the next time by one particular user we just have to look up his/her position in the list.
+
+With this we would obtain the product with which each customer is most satisfied but that doesn't give us a concrete idea on which new product to recommend him. To attain this purpose we could do a simple *PCA* on the complete dataset to determine how each one of the variables affects final decisions, detect clusters and see graphically where a customer is located and which products are in his/her vicinity, both if he has bought them in the past or not. This would give us much more information to play with when determining if a new product is something for him or not, by just looking where this new product falls on the map and where the customer stands.
 
 
 

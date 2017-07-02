@@ -209,7 +209,7 @@ order_products__prior %>%
   filter(order_id <= 50) %>%
   select(reordered) %>%
   group_by(reordered) %>%
-  summarise(n =n())) %>%
+  summarise(n =n()) %>%
   collect
 ```
 
